@@ -35,6 +35,7 @@ type tagHandler func(ctx *tagContext) error
 
 var (
 	// defaultTagHandlers enumerates all the default tag handler
+	//特定tag触发的handler
 	defaultTagHandlers = map[string]tagHandler{
 		"<-":       OnlyFromDBTagHandler,
 		"->":       OnlyToDBTagHandler,

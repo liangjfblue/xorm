@@ -17,6 +17,7 @@ import (
 
 // Statement save all the sql info for executing SQL
 type Statement struct {
+	//映射后的表结构
 	RefTable        *core.Table
 	Engine          *Engine
 	Start           int

@@ -193,3 +193,12 @@ func TestPing(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestMyself(t *testing.T)  {
+	e,err := NewEngine("sqlite3", "test.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_ = e.Find(nil)
+}

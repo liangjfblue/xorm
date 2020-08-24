@@ -23,6 +23,7 @@ func (session *Session) queryPreprocess(sqlStr *string, paramStr ...interface{})
 }
 
 func (session *Session) queryRows(sqlStr string, args ...interface{}) (*core.Rows, error) {
+	//查询后清空sql构建缓冲
 	defer session.resetStatement()
 
 	session.queryPreprocess(&sqlStr, args...)
@@ -69,6 +70,7 @@ func (session *Session) queryRows(sqlStr string, args ...interface{}) (*core.Row
 			return rows, nil
 		}
 
+		//查询
 		rows, err := db.QueryContext(session.ctx, sqlStr, args...)
 		if err != nil {
 			return nil, err

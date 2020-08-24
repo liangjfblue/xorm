@@ -69,25 +69,34 @@ func (session *Session) find(rowsSlicePtr interface{}, condiBean ...interface{})
 		return session.statement.lastError
 	}
 
+	//把指针转换为Value, 根据Value获取指针指向的对象
 	sliceValue := reflect.Indirect(reflect.ValueOf(rowsSlicePtr))
+	//必须是切片或者map类型
 	if sliceValue.Kind() != reflect.Slice && sliceValue.Kind() != reflect.Map {
 		return errors.New("needs a pointer to a slice or a map")
 	}
 
+	//Value转化为Type, 获取切片/map的元素类型
 	sliceElementType := sliceValue.Type().Elem()
 
 	var tp = tpStruct
+	//表结构为nil, 先做映射
 	if session.statement.RefTable == nil {
 		if sliceElementType.Kind() == reflect.Ptr {
+			//若元素类型是指针
+			//获取元素的元素类型, 如果是结构体, 直接根据sliceElementType.Elem()实例化得到元素对象
 			if sliceElementType.Elem().Kind() == reflect.Struct {
 				pv := reflect.New(sliceElementType.Elem())
+				//映射构成表结构
 				if err := session.statement.setRefValue(pv); err != nil {
 					return err
 				}
 			} else {
+				//不是结构体,证明不能映射数据表
 				tp = tpNonStruct
 			}
 		} else if sliceElementType.Kind() == reflect.Struct {
+			//如果是结构体, 直接实例化就行了
 			pv := reflect.New(sliceElementType)
 			if err := session.statement.setRefValue(pv); err != nil {
 				return err
@@ -97,13 +106,15 @@ func (session *Session) find(rowsSlicePtr interface{}, condiBean ...interface{})
 		}
 	}
 
+	//得到orm表结构
 	var table = session.statement.RefTable
 
-	var addedTableName = (len(session.statement.JoinStr) > 0)
+	var addedTableName = len(session.statement.JoinStr) > 0
 	var autoCond builder.Cond
 	if tp == tpStruct {
 		if !session.statement.noAutoCondition && len(condiBean) > 0 {
 			var err error
+			//构建condition
 			autoCond, err = session.statement.buildConds(table, condiBean[0], true, true, false, true, addedTableName)
 			if err != nil {
 				return err
@@ -129,7 +140,9 @@ func (session *Session) find(rowsSlicePtr interface{}, condiBean ...interface{})
 	var sqlStr string
 	var args []interface{}
 	var err error
+	//构建raw sql
 	if session.statement.RawSQL == "" {
+		//是否已经有表映射
 		if len(session.statement.TableName()) <= 0 {
 			return ErrTableNotFound
 		}
@@ -161,6 +174,7 @@ func (session *Session) find(rowsSlicePtr interface{}, condiBean ...interface{})
 		}
 
 		session.statement.cond = session.statement.cond.And(autoCond)
+		//递归构建条件sql
 		condSQL, condArgs, err := builder.ToSQL(session.statement.cond)
 		if err != nil {
 			return err
@@ -181,6 +195,7 @@ func (session *Session) find(rowsSlicePtr interface{}, condiBean ...interface{})
 		args = session.statement.RawParams
 	}
 
+	//缓存此次sql
 	if session.canCache() {
 		if cacher := session.engine.getCacher(session.statement.TableName()); cacher != nil &&
 			!session.statement.IsDistinct &&
@@ -198,6 +213,7 @@ func (session *Session) find(rowsSlicePtr interface{}, condiBean ...interface{})
 }
 
 func (session *Session) noCacheFind(table *core.Table, containerValue reflect.Value, sqlStr string, args ...interface{}) error {
+	//sql查询
 	rows, err := session.queryRows(sqlStr, args...)
 	if err != nil {
 		return err
@@ -210,6 +226,7 @@ func (session *Session) noCacheFind(table *core.Table, containerValue reflect.Va
 	}
 
 	var newElemFunc func(fields []string) reflect.Value
+	//元素类型
 	elemType := containerValue.Type().Elem()
 	var isPointer bool
 	if elemType.Kind() == reflect.Ptr {
@@ -223,31 +240,40 @@ func (session *Session) noCacheFind(table *core.Table, containerValue reflect.Va
 	newElemFunc = func(fields []string) reflect.Value {
 		switch elemType.Kind() {
 		case reflect.Slice:
+			//反射 创建一个切片
 			slice := reflect.MakeSlice(elemType, len(fields), len(fields))
+			//反射 根据切片类型来实例化得到一个切片对象
 			x := reflect.New(slice.Type())
+			//二级切片
 			x.Elem().Set(slice)
 			return x
 		case reflect.Map:
+			//同理
 			mp := reflect.MakeMap(elemType)
 			x := reflect.New(mp.Type())
 			x.Elem().Set(mp)
 			return x
 		}
+		//根据反射 实例化得到对象
 		return reflect.New(elemType)
 	}
 
 	var containerValueSetFunc func(*reflect.Value, core.PK) error
 
+	//切片?
 	if containerValue.Kind() == reflect.Slice {
 		containerValueSetFunc = func(newValue *reflect.Value, pk core.PK) error {
 			if isPointer {
+				//如果是指针, 存储指针指向的对象的地址
 				containerValue.Set(reflect.Append(containerValue, newValue.Elem().Addr()))
 			} else {
+				//直接存放值
 				containerValue.Set(reflect.Append(containerValue, newValue.Elem()))
 			}
 			return nil
 		}
 	} else {
+		//map, 返回keu的Type
 		keyType := containerValue.Type().Key()
 		if len(table.PrimaryKeys) == 0 {
 			return errors.New("don't support multiple primary key's map has non-slice key type")
@@ -258,6 +284,7 @@ func (session *Session) noCacheFind(table *core.Table, containerValue reflect.Va
 
 		containerValueSetFunc = func(newValue *reflect.Value, pk core.PK) error {
 			keyValue := reflect.New(keyType)
+			//外键转换
 			err := convertPKToValue(table, keyValue.Interface(), pk)
 			if err != nil {
 				return err
@@ -271,13 +298,18 @@ func (session *Session) noCacheFind(table *core.Table, containerValue reflect.Va
 		}
 	}
 
+	//[]A 如果elemType基础类型是结构体
 	if elemType.Kind() == reflect.Struct {
+		//实例化, 对象指针
 		var newValue = newElemFunc(fields)
+		//由对象指针的Interface{}得到Value
 		dataStruct := rValue(newValue.Interface())
+
 		tb, err := session.engine.autoMapType(dataStruct)
 		if err != nil {
 			return err
 		}
+		//填充值
 		err = session.rows2Beans(rows, fields, tb, newElemFunc, containerValueSetFunc)
 		rows.Close()
 		if err != nil {
@@ -286,6 +318,7 @@ func (session *Session) noCacheFind(table *core.Table, containerValue reflect.Va
 		return session.executeProcessors()
 	}
 
+	//[][] []map
 	for rows.Next() {
 		var newValue = newElemFunc(fields)
 		bean := newValue.Interface()

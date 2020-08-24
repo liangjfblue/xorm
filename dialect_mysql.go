@@ -175,10 +175,12 @@ type mysql struct {
 	rowFormat         string
 }
 
+//初始化驱动信息
 func (db *mysql) Init(d *core.DB, uri *core.Uri, drivername, dataSourceName string) error {
 	return db.Base.Init(d, db, uri, drivername, dataSourceName)
 }
 
+//设置参数 binlog类型
 func (db *mysql) SetParams(params map[string]string) {
 	rowFormat, ok := params["rowFormat"]
 	if ok {
@@ -199,6 +201,7 @@ func (db *mysql) SetParams(params map[string]string) {
 	}
 }
 
+//SqlType go的类型和mysql的数据类型的转换
 func (db *mysql) SqlType(c *core.Column) string {
 	var res string
 	switch t := c.SQLType.Name; t {
@@ -294,6 +297,7 @@ func (db *mysql) IndexOnTable() bool {
 	return true
 }
 
+//IndexCheckSql 检查索引
 func (db *mysql) IndexCheckSql(tableName, idxName string) (string, []interface{}) {
 	args := []interface{}{db.DbName, tableName, idxName}
 	sql := "SELECT `INDEX_NAME` FROM `INFORMATION_SCHEMA`.`STATISTICS`"
@@ -307,12 +311,14 @@ func (db *mysql) IndexCheckSql(tableName, idxName string) (string, []interface{}
 	return sql, args
 }*/
 
+//TableCheckSql 检查数据表
 func (db *mysql) TableCheckSql(tableName string) (string, []interface{}) {
 	args := []interface{}{db.DbName, tableName}
 	sql := "SELECT `TABLE_NAME` from `INFORMATION_SCHEMA`.`TABLES` WHERE `TABLE_SCHEMA`=? and `TABLE_NAME`=?"
 	return sql, args
 }
 
+//GetColumns 获取数据表的列信息
 func (db *mysql) GetColumns(tableName string) ([]string, map[string]*core.Column, error) {
 	args := []interface{}{db.DbName, tableName}
 	s := "SELECT `COLUMN_NAME`, `IS_NULLABLE`, `COLUMN_DEFAULT`, `COLUMN_TYPE`," +
@@ -424,6 +430,7 @@ func (db *mysql) GetColumns(tableName string) ([]string, map[string]*core.Column
 	return colSeq, cols, nil
 }
 
+//GetTables 获取数据表
 func (db *mysql) GetTables() ([]*core.Table, error) {
 	args := []interface{}{db.DbName}
 	s := "SELECT `TABLE_NAME`, `ENGINE`, `TABLE_ROWS`, `AUTO_INCREMENT`, `TABLE_COMMENT` from " +
@@ -454,6 +461,7 @@ func (db *mysql) GetTables() ([]*core.Table, error) {
 	return tables, nil
 }
 
+//GetIndexes 获取表的索引
 func (db *mysql) GetIndexes(tableName string) (map[string]*core.Index, error) {
 	args := []interface{}{db.DbName, tableName}
 	s := "SELECT `INDEX_NAME`, `NON_UNIQUE`, `COLUMN_NAME` FROM `INFORMATION_SCHEMA`.`STATISTICS` WHERE `TABLE_SCHEMA` = ? AND `TABLE_NAME` = ?"
@@ -505,6 +513,7 @@ func (db *mysql) GetIndexes(tableName string) (map[string]*core.Index, error) {
 	return indexes, nil
 }
 
+//CreateTableSql 创建数据表
 func (db *mysql) CreateTableSql(table *core.Table, tableName, storeEngine, charset string) string {
 	var sql string
 	sql = "CREATE TABLE IF NOT EXISTS "
@@ -512,12 +521,14 @@ func (db *mysql) CreateTableSql(table *core.Table, tableName, storeEngine, chars
 		tableName = table.Name
 	}
 
+	//设置所有和数据库有关的字段格式都是 `xxx`, 避免字段关键字冲突
 	sql += db.Quote(tableName)
 	sql += " ("
 
 	if len(table.ColumnsSeq()) > 0 {
 		pkList := table.PrimaryKeys
 
+		//构造创建表的sql语句
 		for _, colName := range table.ColumnsSeq() {
 			col := table.GetColumn(colName)
 			if col.IsPrimaryKey && len(pkList) == 1 {
@@ -532,6 +543,7 @@ func (db *mysql) CreateTableSql(table *core.Table, tableName, storeEngine, chars
 			sql += ", "
 		}
 
+		//主键
 		if len(pkList) > 1 {
 			sql += "PRIMARY KEY ( "
 			sql += db.Quote(strings.Join(pkList, db.Quote(",")))
@@ -542,6 +554,7 @@ func (db *mysql) CreateTableSql(table *core.Table, tableName, storeEngine, chars
 	}
 	sql += ")"
 
+	//数据库引擎
 	if storeEngine != "" {
 		sql += " ENGINE=" + storeEngine
 	}
@@ -549,10 +562,12 @@ func (db *mysql) CreateTableSql(table *core.Table, tableName, storeEngine, chars
 	if len(charset) == 0 {
 		charset = db.URI().Charset
 	}
+	//字符集
 	if len(charset) != 0 {
 		sql += " DEFAULT CHARSET " + charset
 	}
 
+	//row格式
 	if db.rowFormat != "" {
 		sql += " ROW_FORMAT=" + db.rowFormat
 	}
@@ -566,6 +581,7 @@ func (db *mysql) Filters() []core.Filter {
 type mymysqlDriver struct {
 }
 
+//Parse 解析driverName, dataSourceName, 得到连接数据库信息
 func (p *mymysqlDriver) Parse(driverName, dataSourceName string) (*core.Uri, error) {
 	db := &core.Uri{DbType: core.MYSQL}
 
@@ -618,6 +634,7 @@ func (p *mymysqlDriver) Parse(driverName, dataSourceName string) (*core.Uri, err
 type mysqlDriver struct {
 }
 
+//Parse 解析driverName, dataSourceName, 得到连接数据库信息
 func (p *mysqlDriver) Parse(driverName, dataSourceName string) (*core.Uri, error) {
 	dsnPattern := regexp.MustCompile(
 		`^(?:(?P<user>.*?)(?::(?P<passwd>.*))?@)?` + // [user[:password]@]

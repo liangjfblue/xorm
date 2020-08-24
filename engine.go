@@ -27,13 +27,13 @@ import (
 // Engine is the major struct of xorm, it means a database manager.
 // Commonly, an application only need one engine
 type Engine struct {
-	db      *core.DB
-	dialect core.Dialect
+	db      *core.DB//db封装
+	dialect core.Dialect//数据库特定处理
 
 	ColumnMapper  core.IMapper
 	TableMapper   core.IMapper
 	TagIdentifier string
-	Tables        map[reflect.Type]*core.Table
+	Tables        map[reflect.Type]*core.Table//go对象-表结构
 
 	mutex  *sync.RWMutex
 	Cacher core.Cacher
@@ -57,6 +57,8 @@ type Engine struct {
 	defaultContext context.Context
 }
 
+//setCacher 设置缓存模块, 默认是本地内存
+//用户缓存表结构等
 func (engine *Engine) setCacher(tableName string, cacher core.Cacher) {
 	engine.cacherLock.Lock()
 	engine.cachers[tableName] = cacher

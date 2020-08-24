@@ -15,12 +15,14 @@ import (
 	"xorm.io/core"
 )
 
+//buildConds 构造条件查询的sql
 func (engine *Engine) buildConds(table *core.Table, bean interface{},
 	includeVersion bool, includeUpdated bool, includeNil bool,
 	includeAutoIncr bool, allUseBool bool, useAllCols bool, unscoped bool,
 	mustColumnMap map[string]bool, tableName, aliasName string, addedTableName bool) (builder.Cond, error) {
 	var conds []builder.Cond
 	for _, col := range table.Columns() {
+		//
 		if !includeVersion && col.IsVersion {
 			continue
 		}

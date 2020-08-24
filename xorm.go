@@ -23,6 +23,7 @@ const (
 	Version string = "0.7.0.0504"
 )
 
+//默认支持的数据库驱动
 func regDrvsNDialects() bool {
 	providedDrvsNDialects := map[string]struct {
 		dbType     core.DbType
@@ -41,6 +42,7 @@ func regDrvsNDialects() bool {
 	}
 
 	for driverName, v := range providedDrvsNDialects {
+		//如果没有注册过, 就注册(存放到map)
 		if driver := core.QueryDriver(driverName); driver == nil {
 			core.RegisterDriver(driverName, v.getDriver())
 			core.RegisterDialect(v.dbType, v.getDialect)
@@ -54,32 +56,39 @@ func close(engine *Engine) {
 }
 
 func init() {
+	//注册默认数据库驱动方言,其实就是go struct和各个数据库的数据类型的转换
 	regDrvsNDialects()
 }
 
 // NewEngine new a db manager according to the parameter. Currently support four
 // drivers
+//创建xorm的控制对象, 用于创建session, 发起查询等
 func NewEngine(driverName string, dataSourceName string) (*Engine, error) {
+	//查询驱动是否被支持, 在init时注册
 	driver := core.QueryDriver(driverName)
 	if driver == nil {
 		return nil, fmt.Errorf("Unsupported driver name: %v", driverName)
 	}
 
+	//解析获得连接驱动的uri
 	uri, err := driver.Parse(driverName, dataSourceName)
 	if err != nil {
 		return nil, err
 	}
 
+	//根据驱动类型来获取转换关系, go struct和数据库类型的转换, 和一些特定的实现
 	dialect := core.QueryDialect(uri.DbType)
 	if dialect == nil {
 		return nil, fmt.Errorf("Unsupported dialect type: %v", uri.DbType)
 	}
 
+	//打开数据库
 	db, err := core.Open(driverName, dataSourceName)
 	if err != nil {
 		return nil, err
 	}
 
+	//初始化转换关系对象
 	err = dialect.Init(db, uri, driverName, dataSourceName)
 	if err != nil {
 		return nil, err
@@ -97,12 +106,14 @@ func NewEngine(driverName string, dataSourceName string) (*Engine, error) {
 		defaultContext: context.Background(),
 	}
 
+	//根据驱动类型萱蕚时间格式
 	if uri.DbType == core.SQLITE {
 		engine.DatabaseTZ = time.UTC
 	} else {
 		engine.DatabaseTZ = time.Local
 	}
 
+	//设置log
 	logger := NewSimpleLogger(os.Stdout)
 	logger.SetLevel(core.LOG_INFO)
 	engine.SetLogger(logger)
